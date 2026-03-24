@@ -32,6 +32,10 @@ def health() -> dict:
 
 
 ALL_STYLE_META: dict[str, dict[str, str]] = {
+    "mosaic": {"label": "Mosaic", "description": "Colorful tile mosaic pattern"},
+    "candy": {"label": "Candy", "description": "Vibrant candy-colored painting"},
+    "rain_princess": {"label": "Rain Princess", "description": "Moody impressionist rain scene"},
+    "udnie": {"label": "Udnie", "description": "Abstract cubist fragmentation"},
     "monet": {"label": "Monet", "description": "Soft impressionist brushwork"},
     "starry_night": {"label": "Starry Night", "description": "Swirling Van Gogh texture"},
     "cyberpunk": {"label": "Cyberpunk", "description": "Neon-lit urban grit"},

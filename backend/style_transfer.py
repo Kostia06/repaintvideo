@@ -8,12 +8,21 @@ import numpy as np
 import onnxruntime as ort
 import torch
 
+from style_net import TransformerNet
+
 STYLE_MODELS: dict[str, str] = {
     "monet": "models/weights/monet.onnx",
     "starry_night": "models/weights/starry_night.onnx",
     "cyberpunk": "models/weights/cyberpunk.onnx",
     "ukiyo_e": "models/weights/ukiyo_e.onnx",
     "anime": "models/weights/anime.onnx",
+}
+
+NEURAL_MODELS: dict[str, str] = {
+    "mosaic": "models/pretrained/mosaic.pth",
+    "candy": "models/pretrained/candy.pth",
+    "rain_princess": "models/pretrained/rain_princess.pth",
+    "udnie": "models/pretrained/udnie.pth",
 }
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -265,7 +274,10 @@ def _demo_neon_glow(frame: np.ndarray) -> np.ndarray:
     return cv2.add(dark_bg, neon)
 
 
-DEMO_FILTERS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
+# ---------------------------------------------------------------------------
+# Legacy OpenCV filters (kept for fallback — neural models preferred)
+# ---------------------------------------------------------------------------
+LEGACY_FILTERS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
     "monet": _demo_monet,
     "starry_night": _demo_starry_night,
     "cyberpunk": _demo_cyberpunk,
@@ -364,29 +376,70 @@ def _reencode_with_ffmpeg(raw_path: str, final_path: str) -> bool:
 
 class StyleTransferEngine:
     def __init__(self) -> None:
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # 1. Neural .pth models (primary — real style transfer)
+        self.neural_models: dict[str, TransformerNet] = {}
+        for name, rel_path in NEURAL_MODELS.items():
+            full_path = BASE_DIR / rel_path
+            if not full_path.exists():
+                print(f"[skip] {name}: {full_path} not found")
+                continue
+            try:
+                model = TransformerNet()
+                sd = torch.load(str(full_path), map_location=self.device, weights_only=True)
+                model.load_state_dict(sd)
+                model.to(self.device).eval()
+                self.neural_models[name] = model
+                print(f"[neural] {name} loaded on {self.device}")
+            except Exception as e:
+                print(f"[error] {name}: {e}")
+
+        # 2. ONNX models (secondary)
         self.sessions: dict[str, ort.InferenceSession] = {}
         for name, rel_path in STYLE_MODELS.items():
             full_path = BASE_DIR / rel_path
             if not full_path.exists():
-                print(f"[skip] {name}: {full_path} not found")
                 continue
             try:
                 session = ort.InferenceSession(
                     str(full_path), providers=["CPUExecutionProvider"]
                 )
                 self.sessions[name] = session
-                print(f"[loaded] {name} from {full_path}")
+                print(f"[onnx] {name} loaded")
             except Exception as e:
                 print(f"[error] {name}: {e}")
 
-        loaded = list(self.sessions.keys())
-        demo = list(DEMO_FILTERS.keys())
-        print(f"[init] ONNX models: {loaded or 'none'} | demo filters: {demo}")
+        neural = list(self.neural_models.keys())
+        onnx = list(self.sessions.keys())
+        legacy = list(LEGACY_FILTERS.keys())
+        print(f"[init] neural: {neural} | onnx: {onnx or 'none'} | legacy: {legacy}")
 
     def available_styles(self) -> list[str]:
-        return sorted(set(self.sessions.keys()) | set(DEMO_FILTERS.keys()))
+        return sorted(
+            set(self.neural_models.keys())
+            | set(self.sessions.keys())
+            | set(LEGACY_FILTERS.keys())
+        )
+
+    def _neural_stylize(self, frame: np.ndarray, model: TransformerNet) -> np.ndarray:
+        """Run a frame through a pretrained TransformerNet (.pth)."""
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        tensor = torch.from_numpy(rgb).float().permute(2, 0, 1).unsqueeze(0) / 255.0
+        tensor = tensor.to(self.device)
+        with torch.no_grad():
+            output = model(tensor)
+        output = output.squeeze(0).cpu().clamp(0, 255).byte()
+        result = output.permute(1, 2, 0).numpy()
+        return cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
 
     def apply_style(self, frame: np.ndarray, style: str) -> np.ndarray:
+        # Priority 1: neural .pth models
+        neural_model = self.neural_models.get(style)
+        if neural_model is not None:
+            return self._neural_stylize(frame, neural_model)
+
+        # Priority 2: ONNX models
         session = self.sessions.get(style)
         if session is not None:
             input_tensor, orig_hw = preprocess_frame(frame)
@@ -394,18 +447,13 @@ class StyleTransferEngine:
             result = session.run(None, {input_name: input_tensor})
             return postprocess_tensor(result[0], orig_hw=orig_hw)
 
-        demo_fn = DEMO_FILTERS.get(style)
-        if demo_fn is not None:
-            return demo_fn(frame)
+        # Priority 3: legacy OpenCV filters
+        legacy_fn = LEGACY_FILTERS.get(style)
+        if legacy_fn is not None:
+            return legacy_fn(frame)
 
-        loaded = list(self.sessions.keys())
-        demo = list(DEMO_FILTERS.keys())
-        raise ValueError(
-            f"Style '{style}' not loaded. "
-            f"ONNX models: {loaded or 'none'}. "
-            f"Demo filters: {demo}. "
-            f"Upload .onnx weights to HF Hub and redeploy."
-        )
+        available = self.available_styles()
+        raise ValueError(f"Style '{style}' not available. Available: {available}")
 
     def apply_style_video(
         self,
