@@ -31,9 +31,31 @@ def health() -> dict:
     return {"status": "ok", "styles": engine.available_styles()}
 
 
+ALL_STYLE_META: dict[str, dict[str, str]] = {
+    "monet": {"label": "Monet", "description": "Soft impressionist brushwork"},
+    "starry_night": {"label": "Starry Night", "description": "Swirling Van Gogh texture"},
+    "cyberpunk": {"label": "Cyberpunk", "description": "Neon-lit urban grit"},
+    "ukiyo_e": {"label": "Ukiyo-e", "description": "Japanese woodblock print"},
+    "anime": {"label": "Anime", "description": "Cel-shaded illustration"},
+    "watercolor": {"label": "Watercolor", "description": "Soft wet-edge painting"},
+    "pixel_art": {"label": "Pixel Art", "description": "Retro game aesthetic"},
+    "oil_painting": {"label": "Oil Painting", "description": "Thick impasto brushwork"},
+    "pop_art": {"label": "Pop Art", "description": "Bold Warhol-style colors"},
+    "sketch": {"label": "Sketch", "description": "Pencil drawing effect"},
+    "vintage": {"label": "Vintage", "description": "Retro film nostalgia"},
+    "neon_glow": {"label": "Neon Glow", "description": "Glowing rainbow edges"},
+}
+
+
 @app.get("/api/styles")
-def styles() -> dict:
-    return {"styles": engine.available_styles()}
+def get_styles() -> dict:
+    available = engine.available_styles()
+    return {
+        "styles": [
+            {"key": k, **meta, "available": k in available}
+            for k, meta in ALL_STYLE_META.items()
+        ]
+    }
 
 
 @app.post("/api/style/image")

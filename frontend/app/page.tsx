@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { StylePicker } from "@/components/StylePicker"
+import { StylePicker, type StyleOption } from "@/components/StylePicker"
 import { VideoUploader } from "@/components/VideoUploader"
 import { ResultViewer } from "@/components/ResultViewer"
 
@@ -15,15 +15,16 @@ export default function HomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [apiOnline, setApiOnline] = useState(false)
-  const [availableStyles, setAvailableStyles] = useState<string[]>([])
+  const [styles, setStyles] = useState<StyleOption[]>([])
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/health`)
+    fetch(`${API_BASE}/api/styles`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("Available styles:", data.styles)
-        setAvailableStyles(data.styles)
+        setStyles(data.styles)
         setApiOnline(true)
+        const first = data.styles.find((s: StyleOption) => s.available)
+        if (first) setSelectedStyle(first.key)
       })
       .catch(() => setApiOnline(false))
   }, [])
@@ -65,7 +66,7 @@ export default function HomePage() {
     }
   }
 
-  const hasModels = availableStyles.length > 0
+  const hasAnyAvailable = styles.some((s) => s.available)
 
   return (
     <div className="max-w-5xl mx-auto px-4">
@@ -104,14 +105,14 @@ export default function HomePage() {
             </p>
           </div>
         )}
-        {apiOnline && !hasModels && (
+        {apiOnline && !hasAnyAvailable && (
           <div className="card p-4 border-yellow-500/30 bg-yellow-500/5">
             <p className="text-sm text-yellow-400">
-              Models not loaded yet. Upload weights to your HF Hub repo to enable styling.
+              No styles available yet. Upload weights to your HF Hub repo to enable styling.
             </p>
           </div>
         )}
-        <StylePicker selected={selectedStyle} onChange={setSelectedStyle} />
+        <StylePicker selected={selectedStyle} onChange={setSelectedStyle} styles={styles} />
 
         <h2 className="text-2xl font-bold text-white pt-4">Upload your video</h2>
         <VideoUploader onFile={setFile} />
