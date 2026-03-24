@@ -122,23 +122,28 @@ def _demo_cyberpunk(frame: np.ndarray) -> np.ndarray:
 
 
 def _demo_ukiyo_e(frame: np.ndarray) -> np.ndarray:
-    h, w = frame.shape[:2]
-    small_size = min(256, min(h, w))
-    scale = small_size / max(h, w)
-    small = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    # 1. Flatten texture
+    smooth = cv2.bilateralFilter(frame, 15, 80, 80)
+    smooth = cv2.bilateralFilter(smooth, 15, 80, 80)
+    # 2. K-means quantize to 8 colors
+    h, w = smooth.shape[:2]
+    scale = min(1.0, 256.0 / max(h, w))
+    small = cv2.resize(smooth, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
     pixels = small.reshape(-1, 3).astype(np.float32)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
     _, labels, centers = cv2.kmeans(pixels, 8, None, criteria, 3, cv2.KMEANS_PP_CENTERS)
-    centers = centers.astype(np.uint8)
-    quantized_small = centers[labels.flatten()].reshape(small.shape)
+    quantized_small = centers[labels.flatten()].reshape(small.shape).astype(np.uint8)
     quantized = cv2.resize(quantized_small, (w, h), interpolation=cv2.INTER_NEAREST)
-    smooth = cv2.bilateralFilter(quantized, 9, 150, 150)
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 5)
-    kernel = np.ones((2, 2), np.uint8)
-    edges = cv2.erode(edges, kernel, iterations=1)
-    edge_mask = (edges.astype(np.float32) / 255.0)[:, :, np.newaxis]
-    result = (smooth.astype(np.float32) * (edge_mask * 0.7 + 0.3)).astype(np.uint8)
+    quantized = cv2.bilateralFilter(quantized, 9, 150, 150)
+    # 3. Edge detect on quantized (not original)
+    gray = cv2.cvtColor(quantized, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    kernel = np.ones((3, 3), np.uint8)
+    edges = cv2.dilate(edges, kernel, iterations=1)
+    # 4. Composite: ink outlines over flat colors
+    result = quantized.copy()
+    result[edges > 0] = (15, 15, 15)
+    # 5. Warm paper tone + desaturate
     warm_paper = np.full_like(result, (195, 215, 230), dtype=np.uint8)
     result = cv2.addWeighted(result, 0.95, warm_paper, 0.05, 0)
     hsv = cv2.cvtColor(result, cv2.COLOR_BGR2HSV).astype(np.float32)
@@ -147,17 +152,31 @@ def _demo_ukiyo_e(frame: np.ndarray) -> np.ndarray:
 
 
 def _demo_anime(frame: np.ndarray) -> np.ndarray:
-    color = cv2.bilateralFilter(frame, 9, 200, 200)
-    color = cv2.bilateralFilter(color, 9, 200, 200)
-    posterized = (color // 21 * 21 + 10).astype(np.uint8)
-    hsv = cv2.cvtColor(posterized, cv2.COLOR_BGR2HSV).astype(np.float32)
-    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.3, 0, 255)
-    posterized = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 7, 3)
-    edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-    return cv2.bitwise_and(posterized, edges_bgr)
+    # 1. Flatten micro-texture (fur, fabric) with strong bilateral
+    smooth = cv2.bilateralFilter(frame, 15, 80, 80)
+    smooth = cv2.bilateralFilter(smooth, 15, 80, 80)
+    # 2. K-means quantize to 8 flat colors
+    h, w = smooth.shape[:2]
+    scale = min(1.0, 256.0 / max(h, w))
+    small = cv2.resize(smooth, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+    pixels = small.reshape(-1, 3).astype(np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, labels, centers = cv2.kmeans(pixels, 8, None, criteria, 3, cv2.KMEANS_PP_CENTERS)
+    quantized_small = centers[labels.flatten()].reshape(small.shape).astype(np.uint8)
+    quantized = cv2.resize(quantized_small, (w, h), interpolation=cv2.INTER_NEAREST)
+    # 3. Edge detect on quantized image (not original)
+    gray = cv2.cvtColor(quantized, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    kernel = np.ones((3, 3), np.uint8)
+    edges = cv2.dilate(edges, kernel, iterations=1)
+    # 4. Composite: edge pixels become near-black over flat colors
+    edge_mask = edges[:, :, np.newaxis] > 0
+    result = quantized.copy()
+    result[edge_mask.squeeze()] = (20, 20, 20)
+    # 5. Saturation boost
+    hsv = cv2.cvtColor(result, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.2, 0, 255)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
 
 def _demo_watercolor(frame: np.ndarray) -> np.ndarray:
@@ -202,7 +221,10 @@ def _demo_oil_painting(frame: np.ndarray) -> np.ndarray:
 
 
 def _demo_pop_art(frame: np.ndarray) -> np.ndarray:
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # 1. Smooth first to kill micro-texture
+    smooth = cv2.bilateralFilter(frame, 15, 80, 80)
+    gray = cv2.cvtColor(smooth, cv2.COLOR_BGR2GRAY)
+    # 2. Posterize to 4 bold color bands
     posterized = (gray // 64).astype(np.uint8)
     lut = np.array([
         [140, 30, 20],
@@ -212,12 +234,13 @@ def _demo_pop_art(frame: np.ndarray) -> np.ndarray:
     ], dtype=np.uint8)
     h, w = gray.shape
     result = lut[posterized.flatten()].reshape(h, w, 3)
-    gray_blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    edges = cv2.Canny(gray_blur, 80, 160)
-    kernel = np.ones((2, 2), np.uint8)
+    # 3. Edge detect on smoothed posterized (not raw frame)
+    edges = cv2.Canny(gray, 60, 140)
+    kernel = np.ones((3, 3), np.uint8)
     edges = cv2.dilate(edges, kernel, iterations=1)
-    edge_mask = (edges == 0).astype(np.uint8)[:, :, np.newaxis]
-    return (result * edge_mask).astype(np.uint8)
+    # 4. Composite: bold black outlines
+    result[edges > 0] = (0, 0, 0)
+    return result
 
 
 def _demo_sketch(frame: np.ndarray) -> np.ndarray:
@@ -258,9 +281,11 @@ def _demo_vintage(frame: np.ndarray) -> np.ndarray:
 
 def _demo_neon_glow(frame: np.ndarray) -> np.ndarray:
     h, w = frame.shape[:2]
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 30, 80)
-    kernel = np.ones((2, 2), np.uint8)
+    # Smooth first to only detect major edges, not micro-texture
+    smooth = cv2.bilateralFilter(frame, 15, 80, 80)
+    gray = cv2.cvtColor(smooth, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 120)
+    kernel = np.ones((3, 3), np.uint8)
     edges = cv2.dilate(edges, kernel, iterations=1)
     hue_map = np.zeros((h, w, 3), dtype=np.uint8)
     hue_vals = np.linspace(0, 179, w).astype(np.uint8)
