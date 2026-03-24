@@ -15,6 +15,56 @@ STYLE_MODELS: dict[str, str] = {
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _demo_monet(frame: np.ndarray) -> np.ndarray:
+    smooth = cv2.bilateralFilter(frame, 9, 75, 75)
+    smooth = cv2.bilateralFilter(smooth, 9, 75, 75)
+    hsv = cv2.cvtColor(smooth, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.3, 0, 255)
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.05, 0, 255)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+
+def _demo_starry_night(frame: np.ndarray) -> np.ndarray:
+    smooth = cv2.bilateralFilter(frame, 9, 100, 100)
+    edges = cv2.Canny(frame, 50, 150)
+    edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    hsv = cv2.cvtColor(smooth, cv2.COLOR_BGR2HSV).astype(np.float32)
+    hsv[:, :, 0] = (hsv[:, :, 0] + 20) % 180
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.5, 0, 255)
+    result = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    return cv2.addWeighted(result, 0.85, edges_bgr, 0.15, 0)
+
+
+def _demo_cyberpunk(frame: np.ndarray) -> np.ndarray:
+    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    l = clahe.apply(l)
+    enhanced = cv2.merge([l, a, b])
+    result = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR).astype(np.float32)
+    result[:, :, 0] = np.clip(result[:, :, 0] * 1.3, 0, 255)  # blue boost
+    result[:, :, 2] = np.clip(result[:, :, 2] * 0.7, 0, 255)  # red reduce
+    result[:, :, 1] = np.clip(result[:, :, 1] * 1.1, 0, 255)  # slight green
+    return result.astype(np.uint8)
+
+
+def _demo_ukiyo_e(frame: np.ndarray) -> np.ndarray:
+    quantized = (frame // 32 * 32 + 16).astype(np.uint8)
+    smooth = cv2.bilateralFilter(quantized, 9, 75, 75)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, 5)
+    edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    return cv2.bitwise_and(smooth, edges_bgr)
+
+
+DEMO_FILTERS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
+    "monet": _demo_monet,
+    "starry_night": _demo_starry_night,
+    "cyberpunk": _demo_cyberpunk,
+    "ukiyo_e": _demo_ukiyo_e,
+}
+
+
 def preprocess_frame(frame: np.ndarray, size: int = 512) -> np.ndarray:
     h, w = frame.shape[:2]
     scale = size / max(h, w)
@@ -52,13 +102,17 @@ class StyleTransferEngine:
 
     def apply_style(self, frame: np.ndarray, style: str) -> np.ndarray:
         session = self.sessions.get(style)
-        if session is None:
-            return frame
+        if session is not None:
+            input_tensor = preprocess_frame(frame)
+            input_name = session.get_inputs()[0].name
+            result = session.run(None, {input_name: input_tensor})
+            return postprocess_tensor(result[0])
 
-        input_tensor = preprocess_frame(frame)
-        input_name = session.get_inputs()[0].name
-        result = session.run(None, {input_name: input_tensor})
-        return postprocess_tensor(result[0])
+        demo_fn = DEMO_FILTERS.get(style)
+        if demo_fn is not None:
+            return demo_fn(frame)
+
+        return frame
 
     def apply_style_video(
         self,
