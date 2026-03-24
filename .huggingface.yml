@@ -1,0 +1,8 @@
+title: RepaintVideo
+emoji: "\U0001F3A8"
+colorFrom: green
+colorTo: teal
+sdk: docker
+pinned: false
+license: mit
+app_port: 7860
