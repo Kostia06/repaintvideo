@@ -136,7 +136,7 @@ export default function HomePage() {
       <footer className="py-8 border-t border-white/10 text-center text-sm text-gray-500">
         RepaintVideo &middot; Built with PyTorch + Next.js &middot;{" "}
         <a
-          href="https://github.com/YOUR_USERNAME/repaintvideo"
+          href="https://github.com/Kostia06/repaintvideo"
           className="text-gray-400 hover:text-white transition-colors"
         >
           Open source on GitHub

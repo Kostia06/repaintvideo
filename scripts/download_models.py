@@ -8,7 +8,7 @@ from pathlib import Path
 
 from huggingface_hub import hf_hub_download
 
-HF_REPO = os.getenv("MODEL_REPO", "YOUR_HF_USERNAME/repaintvideo-models")
+HF_REPO = os.getenv("MODEL_REPO", "Kostia06/repaintvideo-models")
 WEIGHTS_DIR = Path(__file__).parent.parent / "models" / "weights"
 WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
 

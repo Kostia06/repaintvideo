@@ -4,7 +4,7 @@ Neural style transfer for video, with temporal consistency.
 
 Transform any video into a living painting — choose from Monet, Starry Night, Cyberpunk, or Ukiyo-e styles. Powered by a feed-forward network with VGG-19 perceptual loss and optical flow warping for flicker-free results.
 
-**Demo:** https://huggingface.co/spaces/YOUR_USERNAME/repaintvideo
+**Demo:** https://huggingface.co/spaces/Kostia06/repaintvideo
 
 ## Architecture
 
