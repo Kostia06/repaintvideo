@@ -284,6 +284,7 @@ DEMO_FILTERS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
 # ---------------------------------------------------------------------------
 
 def preprocess_frame(frame: np.ndarray, size: int = 512) -> np.ndarray:
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     h, w = frame.shape[:2]
     scale = size / max(h, w)
     new_h, new_w = int(h * scale), int(w * scale)
@@ -295,7 +296,8 @@ def preprocess_frame(frame: np.ndarray, size: int = 512) -> np.ndarray:
 def postprocess_tensor(tensor: np.ndarray) -> np.ndarray:
     output = tensor.squeeze(0).transpose(1, 2, 0)
     output = np.clip(output, 0, 255).astype(np.uint8)
-    return output
+    result = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
+    return result
 
 
 def _reencode_with_ffmpeg(raw_path: str, final_path: str) -> bool:
