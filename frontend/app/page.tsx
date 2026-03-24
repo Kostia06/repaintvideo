@@ -100,7 +100,7 @@ export default function HomePage() {
         {!apiOnline && (
           <div className="card p-4 border-red-500/30 bg-red-500/5">
             <p className="text-sm text-red-400">
-              Backend is offline. Run: <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs">cd backend && uvicorn main:app --port 7860</code>
+              Backend is offline. For local dev, run: <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs">cd backend && pip install -r requirements.txt && uvicorn main:app --port 7860</code>. On Hugging Face Spaces this starts automatically.
             </p>
           </div>
         )}

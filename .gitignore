@@ -3,6 +3,7 @@ __pycache__/
 *.pth
 *.onnx
 .env
+.env.local
 node_modules/
 .next/
 out/
