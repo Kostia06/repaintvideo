@@ -59,8 +59,11 @@ def train(cfg: TrainConfig) -> None:
             gen_features = vgg(generated)
             content_features = vgg(batch)
 
+            warmup_scale = min(1.0, step / cfg.warmup_steps)
+            effective_style_weight = cfg.style_weight * warmup_scale
+
             c_loss = content_loss(gen_features, content_features) * cfg.content_weight
-            s_loss = style_loss(gen_features, style_features) * cfg.style_weight
+            s_loss = style_loss(gen_features, style_features) * effective_style_weight
             tv_loss = total_variation_loss(generated) * cfg.tv_weight
             total = c_loss + s_loss + tv_loss
 

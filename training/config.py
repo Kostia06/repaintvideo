@@ -11,8 +11,9 @@ class TrainConfig:
     batch_size: int = 4
     lr: float = 1e-3
     epochs: int = 2
-    content_weight: float = 1.0
-    style_weight: float = 1e5
+    content_weight: float = 5.0
+    style_weight: float = 1e4
     tv_weight: float = 1e-6
     log_every: int = 100
     save_every: int = 1000
+    warmup_steps: int = 500
