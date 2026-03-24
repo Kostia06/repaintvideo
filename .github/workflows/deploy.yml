@@ -1,0 +1,23 @@
+name: Deploy to Hugging Face Spaces
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hugging Face Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "deploy@repaintvideo.com"
+          git config --global user.name "RepaintVideo CI"
+          git remote add hf https://USER:$HF_TOKEN@huggingface.co/spaces/YOUR_HF_USERNAME/repaintvideo
+          git push hf main --force
