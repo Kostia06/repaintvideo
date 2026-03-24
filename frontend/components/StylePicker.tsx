@@ -14,6 +14,14 @@ const STYLES: StyleOption[] = [
   { key: "starry_night", name: "Starry Night", description: "Swirling post-impressionist sky", accent: "bg-indigo-500" },
   { key: "cyberpunk", name: "Cyberpunk", description: "Neon-lit futuristic glow", accent: "bg-pink-500" },
   { key: "ukiyo_e", name: "Ukiyo-e", description: "Japanese woodblock elegance", accent: "bg-red-400" },
+  { key: "anime", name: "Anime", description: "Cel-shaded animation style", accent: "bg-emerald-400" },
+  { key: "watercolor", name: "Watercolor", description: "Soft wet-edge painting", accent: "bg-teal-400" },
+  { key: "pixel_art", name: "Pixel Art", description: "Retro game aesthetic", accent: "bg-green-500" },
+  { key: "oil_painting", name: "Oil Painting", description: "Thick impasto brushwork", accent: "bg-amber-500" },
+  { key: "pop_art", name: "Pop Art", description: "Bold Warhol-style colors", accent: "bg-yellow-400" },
+  { key: "sketch", name: "Sketch", description: "Pencil drawing effect", accent: "bg-gray-400" },
+  { key: "vintage", name: "Vintage", description: "Retro film nostalgia", accent: "bg-orange-400" },
+  { key: "neon_glow", name: "Neon Glow", description: "Glowing rainbow edges", accent: "bg-purple-500" },
 ]
 
 interface StylePickerProps {
@@ -23,7 +31,7 @@ interface StylePickerProps {
 
 export function StylePicker({ selected, onChange }: StylePickerProps) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
       {STYLES.map((style) => (
         <button
           key={style.key}
