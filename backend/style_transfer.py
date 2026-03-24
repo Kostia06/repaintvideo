@@ -6,6 +6,7 @@ from typing import Callable
 import cv2
 import numpy as np
 import onnxruntime as ort
+import torch
 
 STYLE_MODELS: dict[str, str] = {
     "monet": "models/weights/monet.onnx",
@@ -293,10 +294,16 @@ def preprocess_frame(frame: np.ndarray, size: int = 512) -> np.ndarray:
     return np.expand_dims(tensor, axis=0)
 
 
-def postprocess_tensor(tensor: np.ndarray) -> np.ndarray:
-    output = tensor.squeeze(0).transpose(1, 2, 0)
-    output = np.clip(output, 0, 255).astype(np.uint8)
-    result = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
+def postprocess_tensor(tensor: np.ndarray | torch.Tensor) -> np.ndarray:
+    """Convert TransformNet output (Tanh, range [-1,1]) to uint8 HWC numpy array."""
+    if isinstance(tensor, np.ndarray):
+        tensor = torch.from_numpy(tensor)
+    tensor = tensor.squeeze(0).detach().cpu()
+    tensor = (tensor + 1.0) / 2.0
+    tensor = tensor.clamp(0.0, 1.0)
+    tensor = tensor.permute(1, 2, 0)
+    result = (tensor.numpy() * 255).astype(np.uint8)
+    result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
     return result
 
 
