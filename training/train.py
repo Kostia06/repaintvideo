@@ -21,6 +21,7 @@ STYLE_CONFIGS: dict[str, dict[str, str]] = {
     "starry_night": {"style_image": "assets/starry_night.jpg", "output_onnx": "models/weights/starry_night.onnx"},
     "cyberpunk": {"style_image": "assets/cyberpunk.jpg", "output_onnx": "models/weights/cyberpunk.onnx"},
     "ukiyo_e": {"style_image": "assets/ukiyo_e.jpg", "output_onnx": "models/weights/ukiyo_e.onnx"},
+    "anime": {"style_image": "training/styles/anime.jpg", "output_onnx": "models/weights/anime.onnx"},
 }
 
 
