@@ -53,17 +53,29 @@ class TransformNet(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.encoder = nn.Sequential(
-            ConvBlock(3, 32, kernel_size=7, stride=1),
-            ConvBlock(32, 64, kernel_size=3, stride=2),
-            ConvBlock(64, 128, kernel_size=3, stride=2),
+            nn.ReflectionPad2d(3),
+            nn.Conv2d(3, 32, kernel_size=7, stride=1),
+            nn.InstanceNorm2d(32, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(64, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(128, affine=True),
+            nn.ReLU(inplace=True),
         )
         self.residual = nn.Sequential(*[ResidualBlock(128) for _ in range(5)])
         self.decoder = nn.Sequential(
-            ConvBlock(128, 64, kernel_size=3, stride=2, upsample=True),
-            ConvBlock(64, 32, kernel_size=3, stride=2, upsample=True),
-        )
-        self.final = nn.Sequential(
-            nn.Conv2d(32, 3, kernel_size=7, padding=3),
+            nn.Upsample(scale_factor=2, mode="nearest"),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm2d(64, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Upsample(scale_factor=2, mode="nearest"),
+            nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm2d(32, affine=True),
+            nn.ReLU(inplace=True),
+            nn.ReflectionPad2d(3),
+            nn.Conv2d(32, 3, kernel_size=7, stride=1),
             nn.Tanh(),
         )
 
@@ -71,5 +83,4 @@ class TransformNet(nn.Module):
         out = self.encoder(x)
         out = self.residual(out)
         out = self.decoder(out)
-        out = self.final(out)
         return (out + 1.0) * 127.5
