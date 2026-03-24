@@ -23,13 +23,13 @@ def main() -> None:
     print(f"Input:  shape={frame.shape}  dtype={frame.dtype}  "
           f"mean={frame.mean():.1f}")
 
-    tensor = preprocess_frame(frame)
-    tensor = torch.from_numpy(tensor)
+    tensor_np, orig_hw = preprocess_frame(frame)
+    tensor = torch.from_numpy(tensor_np)
     print(f"Tensor: shape={tuple(tensor.shape)}  "
           f"min={tensor.min():.3f}  max={tensor.max():.3f}")
 
     fake_output = (tensor * 2.0) - 1.0
-    result = postprocess_tensor(fake_output)
+    result = postprocess_tensor(fake_output, orig_hw=orig_hw)
     print(f"Output: shape={result.shape}  dtype={result.dtype}  "
           f"mean={result.mean():.1f}")
 

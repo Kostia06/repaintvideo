@@ -284,17 +284,25 @@ DEMO_FILTERS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
 # Preprocessing for ONNX models
 # ---------------------------------------------------------------------------
 
-def preprocess_frame(frame: np.ndarray, size: int = 512) -> np.ndarray:
+def preprocess_frame(
+    frame: np.ndarray,
+    size: int = 512,
+) -> tuple[np.ndarray, tuple[int, int]]:
+    """Returns (tensor, original_hw) so the caller can resize the output back."""
+    orig_h, orig_w = frame.shape[:2]
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    h, w = frame.shape[:2]
-    scale = size / max(h, w)
-    new_h, new_w = int(h * scale), int(w * scale)
+    scale = size / min(orig_h, orig_w)
+    new_w = (int(orig_w * scale) // 8) * 8
+    new_h = (int(orig_h * scale) // 8) * 8
     resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
     tensor = resized.astype(np.float32).transpose(2, 0, 1) / 255.0
-    return np.expand_dims(tensor, axis=0)
+    return np.expand_dims(tensor, axis=0), (orig_h, orig_w)
 
 
-def postprocess_tensor(tensor: np.ndarray | torch.Tensor) -> np.ndarray:
+def postprocess_tensor(
+    tensor: np.ndarray | torch.Tensor,
+    orig_hw: tuple[int, int] | None = None,
+) -> np.ndarray:
     """Convert TransformNet output (Tanh, range [-1,1]) to uint8 HWC numpy array."""
     if isinstance(tensor, np.ndarray):
         tensor = torch.from_numpy(tensor)
@@ -304,6 +312,9 @@ def postprocess_tensor(tensor: np.ndarray | torch.Tensor) -> np.ndarray:
     tensor = tensor.permute(1, 2, 0)
     result = (tensor.numpy() * 255).astype(np.uint8)
     result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+    if orig_hw is not None:
+        orig_h, orig_w = orig_hw
+        result = cv2.resize(result, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
     return result
 
 
@@ -377,10 +388,10 @@ class StyleTransferEngine:
     def apply_style(self, frame: np.ndarray, style: str) -> np.ndarray:
         session = self.sessions.get(style)
         if session is not None:
-            input_tensor = preprocess_frame(frame)
+            input_tensor, orig_hw = preprocess_frame(frame)
             input_name = session.get_inputs()[0].name
             result = session.run(None, {input_name: input_tensor})
-            return postprocess_tensor(result[0])
+            return postprocess_tensor(result[0], orig_hw=orig_hw)
 
         demo_fn = DEMO_FILTERS.get(style)
         if demo_fn is not None:
