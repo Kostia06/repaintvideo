@@ -28,12 +28,12 @@ jobs: dict[str, dict] = {}
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "styles": list(engine.sessions.keys())}
+    return {"status": "ok", "styles": engine.available_styles()}
 
 
 @app.get("/api/styles")
 def styles() -> dict:
-    return {"styles": list(STYLE_MODELS.keys())}
+    return {"styles": engine.available_styles()}
 
 
 @app.post("/api/style/image")
