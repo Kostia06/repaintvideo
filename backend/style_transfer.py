@@ -307,6 +307,25 @@ def postprocess_tensor(tensor: np.ndarray | torch.Tensor) -> np.ndarray:
     return result
 
 
+def warp_frame(prev_frame: np.ndarray, flow: np.ndarray) -> np.ndarray:
+    """Warp prev_frame forward using dense optical flow field."""
+    h, w = flow.shape[:2]
+    map_x = (np.arange(w)[None, :] + flow[..., 0]).astype(np.float32)
+    map_y = (np.arange(h)[:, None] + flow[..., 1]).astype(np.float32)
+    return cv2.remap(prev_frame, map_x, map_y,
+                     interpolation=cv2.INTER_LINEAR,
+                     borderMode=cv2.BORDER_REPLICATE)
+
+
+def compute_flow(prev_gray: np.ndarray, curr_gray: np.ndarray) -> np.ndarray:
+    """Compute dense optical flow with Farneback (OpenCV built-in)."""
+    return cv2.calcOpticalFlowFarneback(
+        prev_gray, curr_gray, None,
+        pyr_scale=0.5, levels=3, winsize=15,
+        iterations=3, poly_n=5, poly_sigma=1.2, flags=0,
+    )
+
+
 def _reencode_with_ffmpeg(raw_path: str, final_path: str) -> bool:
     if not HAS_FFMPEG:
         return False
@@ -375,6 +394,7 @@ class StyleTransferEngine:
         style: str,
         output_path: str,
         progress_cb: Callable[[int], None] | None = None,
+        temporal_weight: float = 0.85,
     ) -> str:
         cap = cv2.VideoCapture(input_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -384,27 +404,40 @@ class StyleTransferEngine:
 
         target_w, target_h = _compute_target_size(orig_h, orig_w)
 
-        ret, first_frame = cap.read()
-        if not ret:
-            cap.release()
-            raise ValueError(f"Cannot read video: {input_path}")
-
-        styled_first = self.apply_style(first_frame, style)
-        styled_first = cv2.resize(styled_first, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
-
         raw_path = output_path + ".raw.mp4"
         fourcc = cv2.VideoWriter.fourcc(*"mp4v")
         writer = cv2.VideoWriter(raw_path, fourcc, fps, (target_w, target_h))
-        writer.write(styled_first)
 
-        frame_idx = 1
+        prev_styled: np.ndarray | None = None
+        prev_gray: np.ndarray | None = None
+        frame_idx = 0
+
         while True:
-            ret, frame = cap.read()
+            ret, frame_bgr = cap.read()
             if not ret:
                 break
-            styled = self.apply_style(frame, style)
+
+            curr_gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+            styled = self.apply_style(frame_bgr, style)
             styled = cv2.resize(styled, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+
+            if prev_styled is not None and prev_gray is not None:
+                prev_gray_resized = cv2.resize(prev_gray, (target_w, target_h))
+                curr_gray_resized = cv2.resize(curr_gray, (target_w, target_h))
+                flow = compute_flow(prev_gray_resized, curr_gray_resized)
+                warped = warp_frame(prev_styled, flow)
+
+                flow_mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
+                reliable = (flow_mag < 20).astype(np.float32)[..., None]
+
+                styled = (
+                    temporal_weight * reliable * warped.astype(np.float32)
+                    + (1.0 - temporal_weight * reliable) * styled.astype(np.float32)
+                ).clip(0, 255).astype(np.uint8)
+
             writer.write(styled)
+            prev_styled = styled
+            prev_gray = curr_gray
             frame_idx += 1
 
             if progress_cb and frame_idx % 10 == 0 and total_frames > 0:
