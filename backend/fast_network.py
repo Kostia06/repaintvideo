@@ -50,32 +50,33 @@ class ResidualBlock(nn.Module):
 
 
 class TransformNet(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, num_resblocks: int = 5, base_channels: int = 32) -> None:
         super().__init__()
+        c = base_channels
         self.encoder = nn.Sequential(
             nn.ReflectionPad2d(3),
-            nn.Conv2d(3, 32, kernel_size=7, stride=1),
-            nn.InstanceNorm2d(32, affine=True),
+            nn.Conv2d(3, c, kernel_size=7, stride=1),
+            nn.InstanceNorm2d(c, affine=True),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.InstanceNorm2d(64, affine=True),
+            nn.Conv2d(c, c * 2, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(c * 2, affine=True),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.InstanceNorm2d(128, affine=True),
+            nn.Conv2d(c * 2, c * 4, kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(c * 4, affine=True),
             nn.ReLU(inplace=True),
         )
-        self.residual = nn.Sequential(*[ResidualBlock(128) for _ in range(5)])
+        self.residual = nn.Sequential(*[ResidualBlock(c * 4) for _ in range(num_resblocks)])
         self.decoder = nn.Sequential(
             nn.Upsample(scale_factor=2, mode="nearest"),
-            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
-            nn.InstanceNorm2d(64, affine=True),
+            nn.Conv2d(c * 4, c * 2, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm2d(c * 2, affine=True),
             nn.ReLU(inplace=True),
             nn.Upsample(scale_factor=2, mode="nearest"),
-            nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
-            nn.InstanceNorm2d(32, affine=True),
+            nn.Conv2d(c * 2, c, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm2d(c, affine=True),
             nn.ReLU(inplace=True),
             nn.ReflectionPad2d(3),
-            nn.Conv2d(32, 3, kernel_size=7, stride=1),
+            nn.Conv2d(c, 3, kernel_size=7, stride=1),
             nn.Tanh(),
         )
 
@@ -84,3 +85,10 @@ class TransformNet(nn.Module):
         out = self.residual(out)
         out = self.decoder(out)
         return (out + 1.0) * 127.5
+
+
+class LightweightTransformNet(TransformNet):
+    """Faster variant for real-time webcam (3 ResBlocks, half channels)."""
+
+    def __init__(self) -> None:
+        super().__init__(num_resblocks=3, base_channels=16)
