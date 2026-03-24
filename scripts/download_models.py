@@ -12,7 +12,7 @@ HF_REPO = os.getenv("MODEL_REPO", "Kostia06/repaintvideo-models")
 WEIGHTS_DIR = Path(__file__).parent.parent / "models" / "weights"
 WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
 
-MODELS = ["monet.onnx", "starry_night.onnx", "cyberpunk.onnx", "ukiyo_e.onnx"]
+MODELS = ["monet.onnx", "starry_night.onnx", "cyberpunk.onnx", "ukiyo_e.onnx", "anime.onnx"]
 
 
 def download_models() -> None:

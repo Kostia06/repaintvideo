@@ -5,7 +5,7 @@ import tempfile
 import cv2
 import numpy as np
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -48,7 +48,10 @@ async def style_image(
     if frame is None:
         return JSONResponse({"error": "Invalid image"}, status_code=400)
 
-    styled = engine.apply_style(frame, style)
+    try:
+        styled = engine.apply_style(frame, style)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     _, encoded = cv2.imencode(".jpg", styled, [cv2.IMWRITE_JPEG_QUALITY, 90])
     return Response(content=encoded.tobytes(), media_type="image/jpeg")
 

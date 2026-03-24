@@ -13,6 +13,7 @@ STYLE_MODELS: dict[str, str] = {
     "starry_night": "models/weights/starry_night.onnx",
     "cyberpunk": "models/weights/cyberpunk.onnx",
     "ukiyo_e": "models/weights/ukiyo_e.onnx",
+    "anime": "models/weights/anime.onnx",
 }
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -397,7 +398,14 @@ class StyleTransferEngine:
         if demo_fn is not None:
             return demo_fn(frame)
 
-        return frame
+        loaded = list(self.sessions.keys())
+        demo = list(DEMO_FILTERS.keys())
+        raise ValueError(
+            f"Style '{style}' not loaded. "
+            f"ONNX models: {loaded or 'none'}. "
+            f"Demo filters: {demo}. "
+            f"Upload .onnx weights to HF Hub and redeploy."
+        )
 
     def apply_style_video(
         self,
