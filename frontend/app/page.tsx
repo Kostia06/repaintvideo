@@ -13,6 +13,8 @@ export default function HomePage() {
   const [file, setFile] = useState<File | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [apiOnline, setApiOnline] = useState(false)
   const [availableStyles, setAvailableStyles] = useState<string[]>([])
 
   useEffect(() => {
@@ -21,14 +23,22 @@ export default function HomePage() {
       .then((data) => {
         console.log("Available styles:", data.styles)
         setAvailableStyles(data.styles)
+        setApiOnline(true)
       })
-      .catch(() => console.log("API not reachable — running in static mode"))
+      .catch(() => setApiOnline(false))
   }, [])
 
   async function handleProcess() {
     if (!file) return
     setIsProcessing(true)
     setJobId(null)
+    setError(null)
+
+    if (!apiOnline) {
+      setError("Backend is not running. Start it with: cd backend && uvicorn main:app --port 7860")
+      setIsProcessing(false)
+      return
+    }
 
     try {
       const form = new FormData()
@@ -39,10 +49,17 @@ export default function HomePage() {
         method: "POST",
         body: form,
       })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? `Server error (${res.status})`)
+      }
+
       const data = await res.json()
       setJobId(data.job_id)
     } catch (err) {
-      console.error("Failed to submit video:", err)
+      const message = err instanceof Error ? err.message : "Failed to connect to server"
+      setError(message)
     } finally {
       setIsProcessing(false)
     }
@@ -80,7 +97,14 @@ export default function HomePage() {
       {/* Upload section */}
       <section id="upload" className="py-12 space-y-6">
         <h2 className="text-2xl font-bold text-white">Choose a style</h2>
-        {!hasModels && (
+        {!apiOnline && (
+          <div className="card p-4 border-red-500/30 bg-red-500/5">
+            <p className="text-sm text-red-400">
+              Backend is offline. Run: <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs">cd backend && uvicorn main:app --port 7860</code>
+            </p>
+          </div>
+        )}
+        {apiOnline && !hasModels && (
           <div className="card p-4 border-yellow-500/30 bg-yellow-500/5">
             <p className="text-sm text-yellow-400">
               Models not loaded yet. Upload weights to your HF Hub repo to enable styling.
@@ -99,6 +123,12 @@ export default function HomePage() {
         >
           {isProcessing ? "Submitting..." : "Process video"}
         </button>
+
+        {error && (
+          <div className="card p-4 border-red-500/30 bg-red-500/5">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
         <ResultViewer jobId={jobId} isImage={false} />
       </section>
