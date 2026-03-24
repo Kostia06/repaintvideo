@@ -413,7 +413,7 @@ class StyleTransferEngine:
         style: str,
         output_path: str,
         progress_cb: Callable[[int], None] | None = None,
-        temporal_weight: float = 0.85,
+        temporal_weight: float = 0.5,
     ) -> str:
         cap = cv2.VideoCapture(input_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -437,22 +437,25 @@ class StyleTransferEngine:
                 break
 
             curr_gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-            styled = self.apply_style(frame_bgr, style)
-            styled = cv2.resize(styled, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+            styled = self.apply_style(frame_bgr, style).astype(np.float32)
+            styled = cv2.resize(styled, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4).astype(np.float32)
 
             if prev_styled is not None and prev_gray is not None:
                 prev_gray_resized = cv2.resize(prev_gray, (target_w, target_h))
                 curr_gray_resized = cv2.resize(curr_gray, (target_w, target_h))
                 flow = compute_flow(prev_gray_resized, curr_gray_resized)
-                warped = warp_frame(prev_styled, flow)
+                warped = warp_frame(prev_styled, flow).astype(np.float32)
 
                 flow_mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
-                reliable = (flow_mag < 20).astype(np.float32)[..., None]
+                reliable = (flow_mag < 5).astype(np.float32)[..., None]
 
-                styled = (
-                    temporal_weight * reliable * warped.astype(np.float32)
-                    + (1.0 - temporal_weight * reliable) * styled.astype(np.float32)
-                ).clip(0, 255).astype(np.uint8)
+                blended = (
+                    reliable * ((1.0 - temporal_weight) * styled + temporal_weight * warped)
+                    + (1.0 - reliable) * styled
+                )
+                styled = blended.clip(0, 255).astype(np.uint8)
+            else:
+                styled = styled.clip(0, 255).astype(np.uint8)
 
             writer.write(styled)
             prev_styled = styled
